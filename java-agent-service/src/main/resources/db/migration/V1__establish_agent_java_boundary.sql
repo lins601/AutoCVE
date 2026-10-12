@@ -1,0 +1,2 @@
+-- Day 1 intentionally creates no workflow tables.
+-- Flyway's schema history table establishes the isolated migration boundary.

@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://autocve.local/contracts/mcp/security-tools.schema.json",
+  "title": "AutoCVE MCP Security Tool Contracts",
+  "description": "Canonical cross-language contract for the Java Agent control plane and Python security tool plane.",
+  "type": "object",
+  "x-autocve-contract-version": "1.0.0",
+  "x-autocve-max-response-bytes": 262144,
+  "x-autocve-tool-names": [
+    "profile_repository",
+    "search_code",
+    "start_security_scan",
+    "get_scan_job",
+    "get_scan_findings",
+    "verify_vulnerability"
+  ],
+  "x-autocve-tool-definitions": {
+    "profile_repository": "profileRepositoryRequest",
+    "search_code": "searchCodeRequest",
+    "start_security_scan": "startSecurityScanRequest",
+    "get_scan_job": "getScanJobRequest",
+    "get_scan_findings": "getScanFindingsRequest",
+    "verify_vulnerability": "verifyVulnerabilityRequest"
+  },
+  "x-autocve-error-codes": [
+    "INVALID_ARGUMENT",
+    "PROJECT_NOT_FOUND",
+    "PERMISSION_DENIED",
+    "CONFLICT",
+    "TOOL_TIMEOUT",
+    "SANDBOX_ERROR",
+    "DEPENDENCY_UNAVAILABLE",
+    "INTERNAL_ERROR"
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "commonRequest": {
+      "type": "object",
+      "required": ["request_id", "trace_id", "audit_id", "project_id"],
+      "properties": {
+        "request_id": { "$ref": "#/$defs/identifier" },
+        "trace_id": { "$ref": "#/$defs/identifier" },
+        "audit_id": { "$ref": "#/$defs/identifier" },
+        "project_id": { "$ref": "#/$defs/identifier" }
+      }
+    },
+    "profileRepositoryRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/commonRequest" },
+        {
+          "type": "object",
+          "properties": {
+            "target_paths": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "maxItems": 64,
+              "default": ["."]
+            },
+            "exclude_patterns": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "maxItems": 128,
+              "default": []
+            }
+          }
+        }
+      ]
+    },
+    "searchCodeRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/commonRequest" },
+        {
+          "type": "object",
+          "required": ["query"],
+          "properties": {
+            "query": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "top_k": { "type": "integer", "minimum": 1, "maximum": 20, "default": 10 },
+            "path_filter": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "maxItems": 64,
+              "default": []
+            },
+            "language_filter": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "maxItems": 32,
+              "default": []
+            }
+          }
+        }
+      ]
+    },
+    "startSecurityScanRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/commonRequest" },
+        {
+          "type": "object",
+          "required": ["scanners"],
+          "properties": {
+            "scanners": {
+              "type": "array",
+              "items": { "enum": ["semgrep", "gitleaks", "trufflehog", "osv"] },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "target_paths": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "maxItems": 64,
+              "default": ["."]
+            },
+            "timeout_seconds": { "type": "integer", "minimum": 30, "maximum": 1800, "default": 600 }
+          }
+        }
+      ]
+    },
+    "getScanJobRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/commonRequest" },
+        {
+          "type": "object",
+          "required": ["job_id"],
+          "properties": {
+            "job_id": { "$ref": "#/$defs/identifier" }
+          }
+        }
+      ]
+    },
+    "getScanFindingsRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/commonRequest" },
+        {
+          "type": "object",
+          "required": ["job_id"],
+          "properties": {
+            "job_id": { "$ref": "#/$defs/identifier" },
+            "cursor": { "type": ["string", "null"], "maxLength": 512, "default": null },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 },
+            "severity_filter": {
+              "type": "array",
+              "items": { "enum": ["critical", "high", "medium", "low"] },
+              "uniqueItems": true,
+              "default": []
+            }
+          }
+        }
+      ]
+    },
+    "findingForVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "title", "category", "file_path", "line_start", "evidence"],
+      "properties": {
+        "finding_id": { "$ref": "#/$defs/identifier" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "category": {
+          "enum": ["authorization", "injection", "logic", "secret", "dependency", "other"]
+        },
+        "file_path": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "line_start": { "type": "integer", "minimum": 1 },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 4000 },
+          "minItems": 1,
+          "maxItems": 20
+        }
+      }
+    },
+    "verifyVulnerabilityRequest": {
+      "allOf": [
+        { "$ref": "#/$defs/commonRequest" },
+        {
+          "type": "object",
+          "required": [
+            "approval_id",
+            "approval_token",
+            "action_digest",
+            "finding",
+            "verification_mode"
+          ],
+          "properties": {
+            "approval_id": { "$ref": "#/$defs/identifier" },
+            "approval_token": { "type": "string", "minLength": 16, "maxLength": 4096 },
+            "action_digest": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "finding": { "$ref": "#/$defs/findingForVerification" },
+            "verification_mode": { "const": "sandbox" },
+            "timeout_seconds": { "type": "integer", "minimum": 10, "maximum": 300, "default": 120 }
+          }
+        }
+      ]
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id"],
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/identifier" },
+        "media_type": { "type": "string", "maxLength": 255 },
+        "summary": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "toolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": { "enum": [
+          "INVALID_ARGUMENT",
+          "PROJECT_NOT_FOUND",
+          "PERMISSION_DENIED",
+          "CONFLICT",
+          "TOOL_TIMEOUT",
+          "SANDBOX_ERROR",
+          "DEPENDENCY_UNAVAILABLE",
+          "INTERNAL_ERROR"
+        ] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "retryable": { "type": "boolean" },
+        "details": { "type": ["object", "null"] }
+      }
+    },
+    "toolResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "trace_id", "request_id", "data", "warnings", "artifacts"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "trace_id": { "$ref": "#/$defs/identifier" },
+        "request_id": { "$ref": "#/$defs/identifier" },
+        "data": { "type": ["object", "array", "string", "number", "boolean", "null"] },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string", "maxLength": 2000 }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactReference" }
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/toolError" },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  }
+}

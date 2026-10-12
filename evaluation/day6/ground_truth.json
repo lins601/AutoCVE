@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "description": "AutoCVE Day 6 deterministic security evaluation replay set",
+  "line_tolerance": 3,
+  "cases": [
+    {
+      "id": "py-sql-injection",
+      "language": "python",
+      "ground_truth": [
+        {"category": "injection", "file_path": "app/users.py", "line_start": 42, "title": "SQL injection in user lookup"}
+      ],
+      "scanner": {"duration_ms": 420, "tool_calls": {"success": 3, "total": 3}, "findings": []},
+      "agent": {
+        "duration_ms": 860,
+        "estimated_tokens": 920,
+        "tool_calls": {"success": 2, "total": 2},
+        "findings": [
+          {"category": "injection", "file_path": "app/users.py", "line_start": 43, "title": "User input reaches raw SQL", "evidence": ["request.args user_id is concatenated into the query"], "source": "agent"}
+        ]
+      }
+    },
+    {
+      "id": "java-hardcoded-secret",
+      "language": "java",
+      "ground_truth": [
+        {"category": "secret", "file_path": "src/main/java/demo/Config.java", "line_start": 17, "title": "Hardcoded API credential"}
+      ],
+      "scanner": {
+        "duration_ms": 310,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "secret", "file_path": "src/main/java/demo/Config.java", "line_start": 17, "title": "Generic high entropy secret", "evidence": ["high entropy token"], "source": "scanner"}
+        ]
+      },
+      "agent": {
+        "duration_ms": 540,
+        "estimated_tokens": 610,
+        "tool_calls": {"success": 1, "total": 1},
+        "findings": [
+          {"category": "secret", "file_path": "src/main/java/demo/Config.java", "line_start": 17, "title": "Credential is used by production HTTP client", "evidence": ["constant flows into Authorization header"], "source": "agent"}
+        ]
+      }
+    },
+    {
+      "id": "js-path-traversal",
+      "language": "javascript",
+      "ground_truth": [
+        {"category": "authorization", "file_path": "routes/download.js", "line_start": 28, "title": "Path traversal in download route"}
+      ],
+      "scanner": {
+        "duration_ms": 375,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "authorization", "file_path": "routes/download.js", "line_start": 29, "title": "Untrusted path reaches file read", "evidence": ["request parameter passed to readFile"], "source": "scanner"}
+        ]
+      },
+      "agent": {"duration_ms": 460, "estimated_tokens": 520, "tool_calls": {"success": 1, "total": 1}, "findings": []}
+    },
+    {
+      "id": "java-missing-tenant-check",
+      "language": "java",
+      "ground_truth": [
+        {"category": "authorization", "file_path": "src/main/java/demo/InvoiceService.java", "line_start": 66, "title": "Cross-tenant invoice access"}
+      ],
+      "scanner": {"duration_ms": 510, "tool_calls": {"success": 3, "total": 3}, "findings": []},
+      "agent": {
+        "duration_ms": 990,
+        "estimated_tokens": 1180,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "authorization", "file_path": "src/main/java/demo/InvoiceService.java", "line_start": 66, "title": "Repository lookup omits tenant id", "evidence": ["controller accepts invoice id while repository query has no tenant predicate"], "source": "agent"}
+        ]
+      }
+    },
+    {
+      "id": "go-vulnerable-dependency",
+      "language": "go",
+      "ground_truth": [
+        {"category": "dependency", "file_path": "go.mod", "line_start": 12, "title": "Known vulnerable JWT dependency"}
+      ],
+      "scanner": {
+        "duration_ms": 680,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "dependency", "file_path": "go.mod", "line_start": 12, "title": "Vulnerable module version", "evidence": ["OSV advisory matches locked version"], "source": "scanner"}
+        ]
+      },
+      "agent": {"duration_ms": 410, "estimated_tokens": 430, "tool_calls": {"success": 1, "total": 1}, "findings": []}
+    },
+    {
+      "id": "py-sanitized-query-negative",
+      "language": "python",
+      "ground_truth": [],
+      "scanner": {
+        "duration_ms": 390,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "injection", "file_path": "app/search.py", "line_start": 31, "title": "Possible SQL injection", "evidence": ["query construction detected"], "source": "scanner"}
+        ]
+      },
+      "agent": {"duration_ms": 620, "estimated_tokens": 710, "tool_calls": {"success": 2, "total": 2}, "findings": []}
+    },
+    {
+      "id": "js-command-injection",
+      "language": "javascript",
+      "ground_truth": [
+        {"category": "injection", "file_path": "lib/convert.js", "line_start": 51, "title": "Command injection in converter"}
+      ],
+      "scanner": {
+        "duration_ms": 455,
+        "tool_calls": {"success": 3, "total": 4},
+        "findings": [
+          {"category": "injection", "file_path": "lib/convert.js", "line_start": 51, "title": "Untrusted input reaches exec", "evidence": ["exec call with interpolated input"], "source": "scanner"},
+          {"category": "injection", "file_path": "lib/constants.js", "line_start": 8, "title": "Suspicious shell string", "evidence": ["shell metacharacter in constant"], "source": "scanner"}
+        ]
+      },
+      "agent": {
+        "duration_ms": 730,
+        "estimated_tokens": 840,
+        "tool_calls": {"success": 2, "total": 2},
+        "findings": [
+          {"category": "injection", "file_path": "lib/convert.js", "line_start": 52, "title": "Upload name controls converter command", "evidence": ["multipart filename reaches exec without quoting"], "source": "agent"}
+        ]
+      }
+    },
+    {
+      "id": "java-ssrf",
+      "language": "java",
+      "ground_truth": [
+        {"category": "other", "file_path": "src/main/java/demo/PreviewClient.java", "line_start": 39, "title": "SSRF in preview endpoint"}
+      ],
+      "scanner": {"duration_ms": 525, "tool_calls": {"success": 3, "total": 3}, "findings": []},
+      "agent": {
+        "duration_ms": 1040,
+        "estimated_tokens": 1260,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "other", "file_path": "src/main/java/demo/PreviewClient.java", "line_start": 40, "title": "Attacker URL reaches HTTP client", "evidence": ["previewUrl is fetched without scheme or address allowlist"], "source": "agent"}
+        ]
+      }
+    },
+    {
+      "id": "go-debug-endpoint",
+      "language": "go",
+      "ground_truth": [
+        {"category": "authorization", "file_path": "internal/http/debug.go", "line_start": 22, "title": "Unauthenticated debug endpoint"}
+      ],
+      "scanner": {"duration_ms": 470, "tool_calls": {"success": 3, "total": 3}, "findings": []},
+      "agent": {"duration_ms": 760, "estimated_tokens": 800, "tool_calls": {"success": 1, "total": 2}, "findings": []}
+    },
+    {
+      "id": "env-secret",
+      "language": "text",
+      "ground_truth": [
+        {"category": "secret", "file_path": ".env.example", "line_start": 7, "title": "Real credential committed in example env"}
+      ],
+      "scanner": {
+        "duration_ms": 270,
+        "tool_calls": {"success": 3, "total": 3},
+        "findings": [
+          {"category": "secret", "file_path": ".env.example", "line_start": 7, "title": "Credential-like token", "evidence": ["provider token pattern"], "source": "scanner"}
+        ]
+      },
+      "agent": {
+        "duration_ms": 390,
+        "estimated_tokens": 350,
+        "tool_calls": {"success": 1, "total": 1},
+        "findings": [
+          {"category": "secret", "file_path": ".env.example", "line_start": 7, "title": "Example value is referenced by deployment", "evidence": ["compose file loads this exact variable in production profile"], "source": "agent"}
+        ]
+      }
+    }
+  ]
+}

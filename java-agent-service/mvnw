@@ -1,0 +1,33 @@
+#!/bin/sh
+
+set -eu
+
+MAVEN_VERSION="3.9.11"
+BASE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+MAVEN_HOME="$BASE_DIR/.mvn/wrapper/apache-maven-$MAVEN_VERSION"
+ARCHIVE="$BASE_DIR/.mvn/wrapper/apache-maven-$MAVEN_VERSION-bin.zip"
+DIST_URL="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/$MAVEN_VERSION/apache-maven-$MAVEN_VERSION-bin.zip"
+
+if [ ! -x "$MAVEN_HOME/bin/mvn" ]; then
+  command -v curl >/dev/null 2>&1 || {
+    echo "curl is required to bootstrap Maven $MAVEN_VERSION" >&2
+    exit 1
+  }
+  command -v unzip >/dev/null 2>&1 || {
+    echo "unzip is required to bootstrap Maven $MAVEN_VERSION" >&2
+    exit 1
+  }
+
+  echo "Bootstrapping Maven $MAVEN_VERSION..." >&2
+  curl --fail --location --retry 3 --output "$ARCHIVE" "$DIST_URL"
+  curl --fail --location --retry 3 --output "$ARCHIVE.sha512" "$DIST_URL.sha512"
+  EXPECTED=$(tr -d '[:space:]' < "$ARCHIVE.sha512")
+  ACTUAL=$(shasum -a 512 "$ARCHIVE" | awk '{print $1}')
+  if [ "$EXPECTED" != "$ACTUAL" ]; then
+    echo "Maven distribution checksum mismatch" >&2
+    exit 1
+  fi
+  unzip -q -o "$ARCHIVE" -d "$BASE_DIR/.mvn/wrapper"
+fi
+
+exec "$MAVEN_HOME/bin/mvn" "$@"

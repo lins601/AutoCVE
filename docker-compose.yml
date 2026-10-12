@@ -1,0 +1,429 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB_NAME:-autocve}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autocve-network
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - autocve-network
+
+  backend:
+    image: autocve-ui-rebrand-backend:latest
+    build:
+      context: ./backend
+      args:
+        http_proxy: ''
+        https_proxy: ''
+        HTTP_PROXY: ''
+        HTTPS_PROXY: ''
+        all_proxy: ''
+        ALL_PROXY: ''
+    restart: unless-stopped
+    cpus: '1.0'
+    mem_limit: 1g
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/${POSTGRES_DB_NAME:-autocve}
+      REDIS_URL: redis://redis:6379/0
+      AGENT_ENABLED: 'true'
+      AGENT_TASK_EXECUTION_MODE: worker
+      AGENT_WORKER_CONCURRENCY: ${AGENT_WORKER_CONCURRENCY:-2}
+      AGENT_WORKER_JOB_TIMEOUT_SECONDS: ${AGENT_WORKER_JOB_TIMEOUT_SECONDS:-3600}
+      AGENT_WORKER_MAX_TRIES: ${AGENT_WORKER_MAX_TRIES:-2}
+      AGENT_EVENT_STREAM_ENABLED: 'true'
+      ONE_CLICK_CVE_EXECUTION_MODE: worker
+      ONE_CLICK_CVE_MAX_REPOSITORY_SIZE_KB: ${ONE_CLICK_CVE_MAX_REPOSITORY_SIZE_KB:-512000}
+      SANDBOX_ENABLED: 'true'
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-autocve-sandbox:latest}
+      MANAGED_PROJECTS_ROOT: /workspace/projects
+      PROJECT_SOURCE_STORAGE_PATH: /app/uploads/project_sources
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:-}
+      CHECKMARX_FEATURE_ENABLED: ${CHECKMARX_FEATURE_ENABLED:-false}
+      CHECKMARX_BASE_URL: ${CHECKMARX_BASE_URL:-}
+      CHECKMARX_CLIENT_ID: ${CHECKMARX_CLIENT_ID:-resource_owner_sast_client}
+      CHECKMARX_CLIENT_SECRET: ${CHECKMARX_CLIENT_SECRET:-}
+      CHECKMARX_SCOPE: ${CHECKMARX_SCOPE:-access_control_api sast_api}
+      WORKFLOW_URL: ${WORKFLOW_URL:-}
+      WORKFLOW_API_TOKEN: ${WORKFLOW_API_TOKEN:-}
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      NO_PROXY: '*'
+    command: sh -c ".venv/bin/alembic upgrade head && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/health'', timeout=2)"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    ports:
+      - '8000:8000'
+    volumes:
+      - backend_uploads:/app/uploads
+      - ./skill_library:/app/skill_library
+      - ./report_template_library:/app/report_template_library
+      - ./projects:/workspace/projects
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - autocve-network
+
+  agent-worker:
+    image: autocve-ui-rebrand-backend:latest
+    restart: unless-stopped
+    cpus: '2.0'
+    mem_limit: 4g
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/${POSTGRES_DB_NAME:-autocve}
+      REDIS_URL: redis://redis:6379/0
+      AGENT_ENABLED: 'true'
+      AGENT_TASK_EXECUTION_MODE: worker
+      AGENT_WORKER_CONCURRENCY: ${AGENT_WORKER_CONCURRENCY:-2}
+      AGENT_WORKER_JOB_TIMEOUT_SECONDS: ${AGENT_WORKER_JOB_TIMEOUT_SECONDS:-3600}
+      AGENT_WORKER_MAX_TRIES: ${AGENT_WORKER_MAX_TRIES:-2}
+      AGENT_EVENT_STREAM_ENABLED: 'true'
+      ONE_CLICK_CVE_EXECUTION_MODE: worker
+      SANDBOX_ENABLED: 'true'
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-autocve-sandbox:latest}
+      MANAGED_PROJECTS_ROOT: /workspace/projects
+      PROJECT_SOURCE_STORAGE_PATH: /app/uploads/project_sources
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:-}
+      CHECKMARX_FEATURE_ENABLED: ${CHECKMARX_FEATURE_ENABLED:-false}
+      CHECKMARX_BASE_URL: ${CHECKMARX_BASE_URL:-}
+      CHECKMARX_CLIENT_ID: ${CHECKMARX_CLIENT_ID:-resource_owner_sast_client}
+      CHECKMARX_CLIENT_SECRET: ${CHECKMARX_CLIENT_SECRET:-}
+      CHECKMARX_SCOPE: ${CHECKMARX_SCOPE:-access_control_api sast_api}
+      WORKFLOW_URL: ${WORKFLOW_URL:-}
+      WORKFLOW_API_TOKEN: ${WORKFLOW_API_TOKEN:-}
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      NO_PROXY: '*'
+    command: .venv/bin/python -m arq app.worker.agent_worker.WorkerSettings
+    depends_on:
+      backend:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+      - ./skill_library:/app/skill_library
+      - ./report_template_library:/app/report_template_library
+      - ./projects:/workspace/projects
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - autocve-network
+
+  one-click-cve-worker:
+    image: autocve-ui-rebrand-backend:latest
+    restart: unless-stopped
+    cpus: '1.0'
+    mem_limit: 2g
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/${POSTGRES_DB_NAME:-autocve}
+      REDIS_URL: redis://redis:6379/0
+      AGENT_ENABLED: 'true'
+      AGENT_TASK_EXECUTION_MODE: worker
+      AGENT_EVENT_STREAM_ENABLED: 'true'
+      ONE_CLICK_CVE_EXECUTION_MODE: worker
+      ONE_CLICK_CVE_MAX_REPOSITORY_SIZE_KB: ${ONE_CLICK_CVE_MAX_REPOSITORY_SIZE_KB:-512000}
+      ONE_CLICK_CVE_WORKER_CONCURRENCY: ${ONE_CLICK_CVE_WORKER_CONCURRENCY:-1}
+      ONE_CLICK_CVE_WORKER_JOB_TIMEOUT_SECONDS: ${ONE_CLICK_CVE_WORKER_JOB_TIMEOUT_SECONDS:-10800}
+      ONE_CLICK_CVE_AGENT_TIMEOUT_SECONDS: ${ONE_CLICK_CVE_AGENT_TIMEOUT_SECONDS:-3000}
+      AUDIT_SESSION_RESUME_TIMEOUT_SECONDS: ${AUDIT_SESSION_RESUME_TIMEOUT_SECONDS:-3000}
+      ONE_CLICK_CVE_WORKER_MAX_TRIES: ${ONE_CLICK_CVE_WORKER_MAX_TRIES:-1}
+      SANDBOX_ENABLED: 'true'
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-autocve-sandbox:latest}
+      MANAGED_PROJECTS_ROOT: /workspace/projects
+      PROJECT_SOURCE_STORAGE_PATH: /app/uploads/project_sources
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:-}
+      CHECKMARX_FEATURE_ENABLED: ${CHECKMARX_FEATURE_ENABLED:-false}
+      CHECKMARX_BASE_URL: ${CHECKMARX_BASE_URL:-}
+      CHECKMARX_CLIENT_ID: ${CHECKMARX_CLIENT_ID:-resource_owner_sast_client}
+      CHECKMARX_CLIENT_SECRET: ${CHECKMARX_CLIENT_SECRET:-}
+      CHECKMARX_SCOPE: ${CHECKMARX_SCOPE:-access_control_api sast_api}
+      WORKFLOW_URL: ${WORKFLOW_URL:-}
+      WORKFLOW_API_TOKEN: ${WORKFLOW_API_TOKEN:-}
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      NO_PROXY: '*'
+    command: .venv/bin/python -m arq app.worker.one_click_cve_worker.WorkerSettings
+    depends_on:
+      backend:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - backend_uploads:/app/uploads
+      - ./skill_library:/app/skill_library
+      - ./report_template_library:/app/report_template_library
+      - ./projects:/workspace/projects
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - autocve-network
+
+  # Java Agent control plane. The profile keeps the original AutoCVE startup
+  # path unchanged until the experimental stack is explicitly enabled.
+  java-agent-service:
+    profiles: ['java-agent']
+    build:
+      context: ./java-agent-service
+    image: autocve-java-agent-service:day7
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      AGENT_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB_NAME:-autocve}
+      AGENT_DB_USERNAME: postgres
+      AGENT_DB_PASSWORD: postgres
+      AGENT_DB_DRIVER: org.postgresql.Driver
+      AGENT_DB_SCHEMA: agent_java
+      AGENT_FLYWAY_ENABLED: 'true'
+      MCP_SERVER_URL: http://autocve-mcp-server:8001
+      MCP_CLIENT_REQUEST_TIMEOUT: 20s
+      MCP_GATEWAY_MAX_ATTEMPTS: '2'
+      MCP_GATEWAY_RETRY_WAIT: 250ms
+      AGENT_LLM_ENABLED: ${AGENT_LLM_ENABLED:-false}
+      AGENT_LLM_PROVIDER: ${AGENT_LLM_PROVIDER:-none}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com}
+      LLM_MODEL_ID: ${LLM_MODEL_ID:-gpt-4.1-mini}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.1}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-4096}
+      AGENT_SCAN_POLL_INTERVAL: ${AGENT_SCAN_POLL_INTERVAL:-500ms}
+      AGENT_SCAN_POLL_TIMEOUT: ${AGENT_SCAN_POLL_TIMEOUT:-3m}
+      AGENT_MAX_REPEATED_TOOL_CALLS: ${AGENT_MAX_REPEATED_TOOL_CALLS:-2}
+      MCP_APPROVAL_HMAC_SECRET: ${MCP_APPROVAL_HMAC_SECRET:-autocve-day5-development-secret-change-me}
+      AGENT_APPROVAL_REQUEST_TTL: ${AGENT_APPROVAL_REQUEST_TTL:-30m}
+      AGENT_APPROVAL_TOKEN_TTL: ${AGENT_APPROVAL_TOKEN_TTL:-5m}
+      AGENT_VERIFICATION_TIMEOUT: ${AGENT_VERIFICATION_TIMEOUT:-120s}
+      AGENT_MAX_APPROVAL_REQUESTS: ${AGENT_MAX_APPROVAL_REQUESTS:-10}
+    depends_on:
+      db:
+        condition: service_healthy
+      autocve-mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://127.0.0.1:8081/actuator/health']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 15s
+    ports:
+      - '${JAVA_AGENT_PORT:-18081}:8081'
+    networks:
+      - autocve-network
+
+  # Day 2 official FastMCP server. The project tree is mounted read-only; only
+  # the dedicated artifact directory can receive oversized tool output.
+  autocve-mcp-server:
+    profiles: ['java-agent']
+    image: autocve-ui-rebrand-backend:latest
+    build:
+      context: ./backend
+      args:
+        http_proxy: ''
+        https_proxy: ''
+        HTTP_PROXY: ''
+        HTTPS_PROXY: ''
+        all_proxy: ''
+        ALL_PROXY: ''
+    restart: unless-stopped
+    environment:
+      AUTOCVE_MCP_CONTRACT_PATH: /contracts/mcp/security-tools.schema.json
+      AUTOCVE_MCP_HOST: 0.0.0.0
+      AUTOCVE_MCP_PORT: '8001'
+      AUTOCVE_MCP_ARTIFACT_ROOT: /app/uploads/mcp_artifacts
+      AUTOCVE_OFFLINE_ANALYSIS: 'true'
+      AUTOCVE_OFFLINE_TOKEN_ESTIMATION: 'true'
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/${POSTGRES_DB_NAME:-autocve}
+      REDIS_URL: redis://redis:6379/0
+      MCP_SCAN_QUEUE_NAME: autocve:arq:mcp_security_scans
+      MANAGED_PROJECTS_ROOT: /workspace/projects
+      MCP_APPROVAL_HMAC_SECRET: ${MCP_APPROVAL_HMAC_SECRET:-autocve-day5-development-secret-change-me}
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-autocve-sandbox:latest}
+      HOST_PROJECT_ROOT: ${HOST_PROJECT_ROOT:-}
+      PYTHONPATH: /app
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      NO_PROXY: '*'
+    command: ['/app/.venv/bin/python', '-m', 'app.mcp']
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - "import socket; connection = socket.create_connection(('127.0.0.1', 8001), 2); connection.close()"
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 5s
+    ports:
+      - '127.0.0.1:${MCP_SERVER_PORT:-18082}:8001'
+    volumes:
+      - backend_uploads:/app/uploads
+      - ./contracts:/contracts:ro
+      - ./projects:/workspace/projects:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - autocve-network
+
+  # Day 3 keeps long-running scanners outside the MCP HTTP request lifecycle.
+  mcp-scan-worker:
+    profiles: ['java-agent']
+    image: autocve-ui-rebrand-backend:latest
+    restart: unless-stopped
+    cpus: '1.0'
+    mem_limit: 2g
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/${POSTGRES_DB_NAME:-autocve}
+      REDIS_URL: redis://redis:6379/0
+      MCP_SCAN_QUEUE_NAME: autocve:arq:mcp_security_scans
+      MCP_SCAN_WORKER_CONCURRENCY: ${MCP_SCAN_WORKER_CONCURRENCY:-1}
+      MCP_SCAN_WORKER_JOB_TIMEOUT_SECONDS: ${MCP_SCAN_WORKER_JOB_TIMEOUT_SECONDS:-1900}
+      MCP_SCAN_WORKER_MAX_TRIES: ${MCP_SCAN_WORKER_MAX_TRIES:-1}
+      MANAGED_PROJECTS_ROOT: /workspace/projects
+      SANDBOX_IMAGE: ${SANDBOX_IMAGE:-autocve-sandbox:latest}
+      PYTHONPATH: /app
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      NO_PROXY: '*'
+    command: ['/app/.venv/bin/python', '-m', 'arq', 'app.worker.mcp_scan_worker.WorkerSettings']
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - "import pathlib; assert b'app.worker.mcp_scan_worker' in pathlib.Path('/proc/1/cmdline').read_bytes()"
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    volumes:
+      - ./projects:/workspace/projects:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - autocve-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        http_proxy: ''
+        https_proxy: ''
+        HTTP_PROXY: ''
+        HTTPS_PROXY: ''
+        all_proxy: ''
+        ALL_PROXY: ''
+        VITE_ENABLE_CHECKMARX_SCAN: ${VITE_ENABLE_CHECKMARX_SCAN:-false}
+        VITE_APP_VERSION: ${VITE_APP_VERSION:-}
+    restart: unless-stopped
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      VITE_HOST_PROJECT_ROOT: ${VITE_HOST_PROJECT_ROOT:-}
+      VITE_ENABLE_CHECKMARX_SCAN: ${VITE_ENABLE_CHECKMARX_SCAN:-false}
+      HTTP_PROXY: ''
+      HTTPS_PROXY: ''
+      http_proxy: ''
+      https_proxy: ''
+      NO_PROXY: '*'
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '3000:80'
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - autocve-network
+
+  sandbox:
+    build:
+      context: ./docker/sandbox
+      args:
+        PIP_INDEX_URL: ${SANDBOX_PIP_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple/}
+    image: autocve-sandbox:latest
+    restart: 'no'
+    command: echo 'Sandbox image ready'
+
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - autocve-network
+
+networks:
+  autocve-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: ${POSTGRES_VOLUME_NAME:-autocve_postgres_data}
+  redis_data:
+    name: ${REDIS_VOLUME_NAME:-autocve_redis_data}
+  backend_uploads:
+    name: ${BACKEND_UPLOADS_VOLUME_NAME:-autocve_backend_uploads}

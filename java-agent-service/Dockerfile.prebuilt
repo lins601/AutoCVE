@@ -1,0 +1,15 @@
+ARG JAVA_BUILDER_IMAGE=autocve-java-agent-service:day6-test
+FROM ${JAVA_BUILDER_IMAGE} AS builder
+
+FROM eclipse-temurin:21-jre
+
+WORKDIR /app
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --create-home autocve
+COPY --from=builder /workspace/target/java-agent-service-*.jar /app/java-agent-service.jar
+USER autocve
+
+EXPOSE 8081
+ENTRYPOINT ["java", "-jar", "/app/java-agent-service.jar"]

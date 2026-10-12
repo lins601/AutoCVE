@@ -1,0 +1,217 @@
+{
+  "status": "success",
+  "dataset_version": "1.0.0",
+  "case_count": 10,
+  "line_tolerance": 3,
+  "metrics": {
+    "scanner_only": {
+      "tp": 5,
+      "fp": 2,
+      "fn": 4,
+      "duration_ms": 4405,
+      "estimated_tokens": 0,
+      "tool_success": 30,
+      "tool_total": 31,
+      "precision": 0.7143,
+      "recall": 0.5556,
+      "false_positive_rate": 0.2857,
+      "tool_success_rate": 0.9677
+    },
+    "scanner_agent": {
+      "tp": 8,
+      "fp": 2,
+      "fn": 1,
+      "duration_ms": 11205,
+      "estimated_tokens": 7620,
+      "tool_success": 47,
+      "tool_total": 49,
+      "precision": 0.8,
+      "recall": 0.8889,
+      "false_positive_rate": 0.2,
+      "tool_success_rate": 0.9592
+    }
+  },
+  "agent_contributions": {
+    "supplemental_findings": [
+      {
+        "case_id": "py-sql-injection",
+        "title": "User input reaches raw SQL"
+      },
+      {
+        "case_id": "java-missing-tenant-check",
+        "title": "Repository lookup omits tenant id"
+      },
+      {
+        "case_id": "java-ssrf",
+        "title": "Attacker URL reaches HTTP client"
+      }
+    ],
+    "additional_evidence": [
+      {
+        "case_id": "java-hardcoded-secret",
+        "title": "Credential is used by production HTTP client"
+      },
+      {
+        "case_id": "js-command-injection",
+        "title": "Upload name controls converter command"
+      },
+      {
+        "case_id": "env-secret",
+        "title": "Example value is referenced by deployment"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "case_id": "py-sql-injection",
+      "language": "python",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "java-hardcoded-secret",
+      "language": "java",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "js-path-traversal",
+      "language": "javascript",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "java-missing-tenant-check",
+      "language": "java",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "go-vulnerable-dependency",
+      "language": "go",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "py-sanitized-query-negative",
+      "language": "python",
+      "ground_truth_count": 0,
+      "scanner_only": {
+        "tp": 0,
+        "fp": 1,
+        "fn": 0
+      },
+      "scanner_agent": {
+        "tp": 0,
+        "fp": 1,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "js-command-injection",
+      "language": "javascript",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 0
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 1,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "java-ssrf",
+      "language": "java",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    },
+    {
+      "case_id": "go-debug-endpoint",
+      "language": "go",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1
+      },
+      "scanner_agent": {
+        "tp": 0,
+        "fp": 0,
+        "fn": 1
+      }
+    },
+    {
+      "case_id": "env-secret",
+      "language": "text",
+      "ground_truth_count": 1,
+      "scanner_only": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      },
+      "scanner_agent": {
+        "tp": 1,
+        "fp": 0,
+        "fn": 0
+      }
+    }
+  ],
+  "generated_at_epoch_ms": 1784449940450
+}

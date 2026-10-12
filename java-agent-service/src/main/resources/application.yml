@@ -1,0 +1,96 @@
+server:
+  port: ${SERVER_PORT:8081}
+  shutdown: graceful
+
+spring:
+  application:
+    name: autocve-java-agent-service
+  datasource:
+    url: "${AGENT_DB_URL:jdbc:h2:mem:autocve_agent;MODE=PostgreSQL;DB_CLOSE_DELAY=-1}"
+    username: ${AGENT_DB_USERNAME:sa}
+    password: ${AGENT_DB_PASSWORD:}
+    driver-class-name: ${AGENT_DB_DRIVER:org.h2.Driver}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: ${AGENT_DB_SCHEMA:PUBLIC}
+  flyway:
+    enabled: ${AGENT_FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    default-schema: ${AGENT_DB_SCHEMA:PUBLIC}
+    schemas: ${AGENT_DB_SCHEMA:PUBLIC}
+    create-schemas: true
+  ai:
+    model:
+      chat: ${AGENT_LLM_PROVIDER:none}
+    openai:
+      api-key: ${LLM_API_KEY:${OPENAI_API_KEY:}}
+      base-url: ${LLM_BASE_URL:${OPENAI_BASE_URL:https://api.openai.com}}
+      chat:
+        options:
+          model: ${LLM_MODEL_ID:${LLM_MODEL:gpt-4.1-mini}}
+          temperature: ${LLM_TEMPERATURE:0.1}
+          max-tokens: ${LLM_MAX_TOKENS:4096}
+    mcp:
+      client:
+        enabled: true
+        name: autocve-java-agent
+        version: 0.1.0
+        initialized: true
+        type: SYNC
+        request-timeout: ${MCP_CLIENT_REQUEST_TIMEOUT:20s}
+        toolcallback:
+          enabled: false
+        streamable-http:
+          connections:
+            autocve-security:
+              url: ${MCP_SERVER_URL:http://localhost:18082}
+              endpoint: /mcp
+
+autocve:
+  agent:
+    workflow:
+      llm-enabled: ${AGENT_LLM_ENABLED:false}
+      scan-poll-interval: ${AGENT_SCAN_POLL_INTERVAL:500ms}
+      scan-poll-timeout: ${AGENT_SCAN_POLL_TIMEOUT:3m}
+      max-repeated-tool-calls: ${AGENT_MAX_REPEATED_TOOL_CALLS:2}
+      max-stored-events: ${AGENT_MAX_STORED_EVENTS:500}
+      max-finding-pages: ${AGENT_MAX_FINDING_PAGES:10}
+    approval:
+      hmac-secret: ${MCP_APPROVAL_HMAC_SECRET:autocve-day5-development-secret-change-me}
+      request-ttl: ${AGENT_APPROVAL_REQUEST_TTL:30m}
+      token-ttl: ${AGENT_APPROVAL_TOKEN_TTL:5m}
+      verification-timeout: ${AGENT_VERIFICATION_TIMEOUT:120s}
+      max-requests: ${AGENT_MAX_APPROVAL_REQUESTS:10}
+  mcp:
+    gateway:
+      max-attempts: ${MCP_GATEWAY_MAX_ATTEMPTS:2}
+      retry-wait: ${MCP_GATEWAY_RETRY_WAIT:250ms}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    contract-version: 1.0.0
+    implementation-day: 1
+    mcp-implementation-day: 4
+    hitl-implementation-day: 5
+    evaluation-implementation-day: 6
